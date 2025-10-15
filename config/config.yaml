@@ -1,0 +1,17 @@
+alarm_cooldown_sec: 15
+camera_feeds:
+- data/helmet_detection(1).mp4
+- data/helmet_detection(2).mp4
+- data/helmet_detection.mp4
+camera_titles:
+- All Helmet
+- 1 Violation
+- Pata nahi konsi video hai
+class_file: data/class_names.yaml
+confidence_threshold: 0.5
+esp_ip: 10.220.158.82
+model_path: weights/helmet_model.pt
+serial_port: COM4
+use_wifi: false
+wifi_password: peeyush26
+wifi_ssid: Peeyush's S24 Ultra
