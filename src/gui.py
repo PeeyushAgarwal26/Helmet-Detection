@@ -92,14 +92,9 @@ class HelmetGUI:
         tk.Label(esp_frame, text="Serial Port:").pack(side="left", padx=5)
         self.serial_port_entry = tk.Entry(esp_frame, width=20)
         self.serial_port_entry.pack(side="left")
-        try:
-            with open("alarm.py", "r") as f:
-                alarm_code = f.read()
-            match = re.search(r'SERIAL_PORT\s*=\s*"(.*?)"', alarm_code)
-            if match:
-                self.serial_port_entry.insert(0, match.group(1))
-        except:
-            pass
+
+        # Get the serial port from the config dict, providing '' as a default
+        self.serial_port_entry.insert(0, self.config.get('serial_port', ''))
 
         tk.Button(esp_frame, text="WiFi Settings",
                   command=self.open_wifi_settings).pack(side="left", padx=10)
@@ -129,21 +124,8 @@ class HelmetGUI:
     def update_esp_config(self):
         self.config['esp_ip'] = self.esp_ip_entry.get().strip()
         self.config['use_wifi'] = self.use_wifi_var.get()
+        self.config['serial_port'] = self.serial_port_entry.get().strip()
         self.save_config()
-
-        serial_port = self.serial_port_entry.get().strip()
-        if serial_port:
-            try:
-                with open("alarm.py", 'r') as f:
-                    code = f.read()
-                code = re.sub(r'SERIAL_PORT\s*=\s*".*?"',
-                              f'SERIAL_PORT = "{serial_port}"', code)
-                with open("alarm.py", 'w') as f:
-                    f.write(code)
-            except Exception as e:
-                messagebox.showerror(
-                    "Error", f"Failed to update alarm.py: {e}")
-                return
 
         messagebox.showinfo("Saved", "ESP and Serial config updated")
 

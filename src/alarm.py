@@ -1,13 +1,29 @@
 import time
 import threading
 import serial
+import yaml
 
+CONFIG_PATH = "config/config.yaml"
+
+def load_config():
+    """Loads the configuration from the YAML file."""
+    try:
+        with open(CONFIG_PATH, 'r') as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        print(f"ERROR: Configuration file not found at {CONFIG_PATH}")
+        return None
+    except Exception as e:
+        print(f"ERROR: Failed to load or parse config file: {e}")
+        return None
+
+config = load_config()
 # Cooldown to avoid repeated buzz
 last_sent_time = {}
-COOLDOWN = 15  # seconds
+COOLDOWN = config['alarm_cooldown_sec']  # seconds
 
 # Serial configuration
-SERIAL_PORT = "COM4"
+SERIAL_PORT = config['serial_port']
 BAUDRATE = 115200
 serial_lock = threading.Lock()
 
@@ -57,21 +73,21 @@ def send_buzzer_command(state, use_wifi, esp_ip=None):
         else:
             print("[USB] Serial port not open, can't send command")
 
-def trigger_alarm(camera_id, cooldown, use_wifi=False, esp_ip=None):
-    now = time.time()
+# def trigger_alarm(camera_id, cooldown, use_wifi=False, esp_ip=None):
+#     now = time.time()
 
-    if camera_id not in last_sent_time:
-        last_sent_time[camera_id] = 0
+#     if camera_id not in last_sent_time:
+#         last_sent_time[camera_id] = 0
 
-    if now - last_sent_time[camera_id] > COOLDOWN:
-        print(f"[ALARM] No helmet detected on Camera {camera_id}")
-        threading.Thread(
-            target=send_buzzer_command,
-            args=(True, use_wifi, esp_ip),
-            daemon=True
-            ).start()
+#     if now - last_sent_time[camera_id] > COOLDOWN:
+#         print(f"[ALARM] No helmet detected on Camera {camera_id}")
+#         threading.Thread(
+#             target=send_buzzer_command,
+#             args=(True, use_wifi, esp_ip),
+#             daemon=True
+#             ).start()
         
-        last_sent_time[camera_id] = now
+#         last_sent_time[camera_id] = now
 
 def close_serial():
     global ser
