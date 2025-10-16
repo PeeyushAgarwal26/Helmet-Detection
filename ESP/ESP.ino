@@ -1,39 +1,16 @@
-/*
-  ESP8266 Web Server for Buzzer Control
-  This sketch creates a simple web server on the ESP8266 that listens for
-  HTTP GET requests to turn a buzzer on or off.
-  - Connects to a WiFi network.
-  - Listens on port 80.
-  - GET /buzz_on  -> Turns the buzzer ON.
-  - GET /buzz_off -> Turns the buzzer OFF.
-  - GET /         -> Shows the current status.
-*/
+#include <WiFi.h>
+#include <WebServer.h>
 
-// Include required libraries
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
+const char* ssid = "Peeyush's S24 Ultra";
+const char* password = "peeyush26";
 
-// --- WiFi Credentials ---
-// These values will be replaced by the Python GUI script.
-// Do not change the structure of these two lines.
-const char* ssid = "Guruji bsnl";
-const char* password = "password";
+const int buzzerPin = 2;
+const int ledPin = 4;
 
-// --- Hardware Pin ---
-// Define the GPIO pin where the buzzer's positive lead is connected.
-// For NodeMCU, D1 is GPIO5.
-const int buzzerPin = D2;
-const int ledPin = D4;
+WebServer server(80);
 
-// Create a web server object that listens on port 80
-ESP8266WebServer server(80);
-
-// String to store incoming serial data
 String serialCommand;
 
-// --- Handler Functions for Web Routes ---
-
-// Function to handle the "/buzz_on" request
 void handleBuzzOn() {
     digitalWrite(buzzerPin, HIGH); // Turn the buzzer ON
     digitalWrite(ledPin, HIGH); // Turn the buzzer ON

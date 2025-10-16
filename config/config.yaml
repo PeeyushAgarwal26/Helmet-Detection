@@ -6,12 +6,24 @@ camera_feeds:
 camera_titles:
 - All Helmet
 - 1 Violation
-- Pata nahi konsi video hai
-class_file: data/class_names.yaml
+- Testing
 confidence_threshold: 0.5
-esp_ip: 10.220.158.82
-model_path: weights/helmet_model.pt
-serial_port: COM2
+detection_model: Face Detection
+esp_ip: 10.220.158.226
+models:
+  face:
+    class_file: data/classes/face_class.yaml
+    model_path: weights/face_model.pt
+  helmet:
+    class_file: data/classes/helmet_class.yaml
+    model_path: weights/helmet_model.pt
+  person:
+    class_file: data/classes/person_class.yaml
+    model_path: weights/person_model.pt
+  vehicle:
+    class_file: data/classes/vehicle_class.yaml
+    model_path: weights/vehicle_model.pt
+serial_port: COM4
 use_wifi: false
 wifi_password: peeyush26
 wifi_ssid: Peeyush's S24 Ultra

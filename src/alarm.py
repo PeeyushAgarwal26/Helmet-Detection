@@ -1,97 +1,98 @@
 import time
 import threading
 import serial
-import yaml
+import requests
 
-CONFIG_PATH = "config/config.yaml"
-
-def load_config():
-    """Loads the configuration from the YAML file."""
-    try:
-        with open(CONFIG_PATH, 'r') as f:
-            return yaml.safe_load(f)
-    except FileNotFoundError:
-        print(f"ERROR: Configuration file not found at {CONFIG_PATH}")
-        return None
-    except Exception as e:
-        print(f"ERROR: Failed to load or parse config file: {e}")
-        return None
-
-config = load_config()
-# Cooldown to avoid repeated buzz
-last_sent_time = {}
-COOLDOWN = config['alarm_cooldown_sec']  # seconds
-
-# Serial configuration
-SERIAL_PORT = config['serial_port']
-BAUDRATE = 115200
-serial_lock = threading.Lock()
-
-# Global serial object
-ser = None
-
-def init_serial():
-    global ser
-    try:
-        ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=1)
-        print(f"[USB] Serial connected on {SERIAL_PORT}")
-    except Exception as e:
-        ser = None
-        print(f"[USB] Failed to open serial port {SERIAL_PORT}: {e}")
-
-def reconnect_serial():
-    global ser
-    try:
-        if ser:
-            ser.close()
-            time.sleep(0.5)
-        ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=1)
-        print("[USB] Serial reconnected.")
-    except Exception as e:
-        ser = None
-        print(f"[USB] Reconnection failed: {e}")
-
-def send_buzzer_command(state, use_wifi, esp_ip=None):
-    if use_wifi and esp_ip:
-        import requests
-        try:
-            url = f"http://{esp_ip}/buzz_{'on' if state else 'off'}"
-            print(f"[WiFi] Sending request to {url}")
-            requests.get(url, timeout=1)
-        except Exception as e:
-            print(f"[WiFi] Error sending buzzer request: {e}")
-    else:
-        if ser and ser.is_open:
-            cmd = "buzz_on\n" if state else "buzz_off\n"
-            try:
-                with serial_lock:
-                    ser.write(cmd.encode())
-                print(f"[USB] Sent: {cmd.strip()}")
-            except Exception as e:
-                print(f"[USB] Error sending serial command: {e}")
-                reconnect_serial()
-        else:
-            print("[USB] Serial port not open, can't send command")
-
-# def trigger_alarm(camera_id, cooldown, use_wifi=False, esp_ip=None):
-#     now = time.time()
-
-#     if camera_id not in last_sent_time:
-#         last_sent_time[camera_id] = 0
-
-#     if now - last_sent_time[camera_id] > COOLDOWN:
-#         print(f"[ALARM] No helmet detected on Camera {camera_id}")
-#         threading.Thread(
-#             target=send_buzzer_command,
-#             args=(True, use_wifi, esp_ip),
-#             daemon=True
-#             ).start()
+class CentralAlarm:
+    """
+    Manages the buzzer state based on violation statuses from all cameras.
+    The buzzer turns on if any camera reports a violation and only turns
+    off when all cameras are clear.
+    """
+    def __init__(self, config, violation_status):
+        self.config = config
+        self.violation_status = violation_status  # Shared dictionary {cam_id: bool}
+        self.buzzer_state = False
+        self.stop_event = threading.Event()
+        self.ser = None
+        self.serial_lock = threading.Lock()
         
-#         last_sent_time[camera_id] = now
+        # Initialize serial port if WiFi is not used
+        if not self.config.get('use_wifi', True):
+            self._init_serial()
 
-def close_serial():
-    global ser
-    if ser and ser.is_open:
-        print("[USB] Closing serial port...")
-        ser.close()
-        time.sleep(0.5)
+    def _init_serial(self):
+        """Initializes the serial connection."""
+        port = self.config.get('serial_port')
+        if not port:
+            print("[ALARM] Serial port not configured.")
+            return
+        try:
+            self.ser = serial.Serial(port, 115200, timeout=1)
+            print(f"[ALARM] Serial connected on {port}")
+        except Exception as e:
+            self.ser = None
+            print(f"🔴 [ALARM] Failed to open serial port {port}: {e}")
+
+    def _send_command(self, state):
+        """Sends the 'on' or 'off' command via WiFi or Serial."""
+        command_str = 'on' if state else 'off'
+        
+        if self.config.get('use_wifi', True):
+            esp_ip = self.config.get('esp_ip')
+            if not esp_ip:
+                print("🔴 [ALARM] WiFi is enabled but ESP IP is not configured.")
+                return
+            try:
+                url = f"http://{esp_ip}/buzz_{command_str}"
+                requests.get(url, timeout=1)
+                print(f" [ALARM] WiFi command sent to {url}")
+            except Exception as e:
+                print(f"🔴 [ALARM] WiFi request failed: {e}")
+        else:
+            if self.ser and self.ser.is_open:
+                cmd = f"buzz_{command_str}\n".encode()
+                try:
+                    with self.serial_lock:
+                        self.ser.write(cmd)
+                    print(f" [ALARM] Serial command sent: {cmd.strip()}")
+                except Exception as e:
+                    print(f"🔴 [ALARM] Serial write failed: {e}")
+            else:
+                print(" [ALARM] Serial port not open, can't send command.")
+
+    def run(self):
+        """
+        The main loop for the alarm thread. Periodically checks the shared
+        violation status and updates the buzzer accordingly.
+        """
+        print("[INFO] Central Alarm System started.")
+        while not self.stop_event.is_set():
+            try:
+                # Check if any value in the dictionary is True
+                is_any_violation = any(self.violation_status.values())
+
+                if is_any_violation and not self.buzzer_state:
+                    print(" [ALARM] Violation detected! Turning buzzer ON.")
+                    self._send_command(True)
+                    self.buzzer_state = True
+                elif not is_any_violation and self.buzzer_state:
+                    print(" [ALARM] All streams clear. Turning buzzer OFF.")
+                    self._send_command(False)
+                    self.buzzer_state = False
+
+            except Exception as e:
+                print(f"🔴 [ERROR] Unhandled error in alarm loop: {e}")
+
+            time.sleep(1) # Check status every second
+
+        print("[INFO] Central Alarm System stopping...")
+        if self.buzzer_state: # Ensure buzzer is off on exit
+            self._send_command(False)
+        if self.ser and self.ser.is_open:
+            self.ser.close()
+            print("[INFO] Serial port closed.")
+
+    def stop(self):
+        """Signals the alarm thread to stop."""
+        self.stop_event.set()
