@@ -6,3 +6,4 @@ pyyaml
 requests
 torchvision
 tkinter
+ttkbootstrap
